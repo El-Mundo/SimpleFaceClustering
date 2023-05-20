@@ -1,7 +1,8 @@
 output/*
 !output.txt
 
-img_demo/
+img_demo/*
+!sample.png
 
 src/gen_cmd.ipynb
 test.ipynb
