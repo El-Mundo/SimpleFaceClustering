@@ -1,0 +1,3 @@
+This folder is used as the default path for outputs
+Sub-folders will be generated under it by default, with the name of the processed video as the name of the sub-folder
+It will contains three parts as the result: a bunch of images with detected faces, a tsv file that indicates the face embeddings from DeepFace, and a csv file wiht TSNE dimension reducted axis

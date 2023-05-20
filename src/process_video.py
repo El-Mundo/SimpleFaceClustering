@@ -4,7 +4,7 @@ from mtcnn import MTCNN
 from glob import glob
 import cv2
 import os
-import tensorflow as tf
+import tsne
 
 def create_folder(dir, name):
 	folder = ""
@@ -88,7 +88,7 @@ def process_video(v_path, o_path='output/', t_interval=5.0, min_face_size=240, m
 
 			new_lines += f"{video_name}\t{count}\t{i}\t{[x, y, w, h]}\t{embedding}\n"
 		
-		with open(f"{target}/embeddings.csv", "a") as f:
+		with open(f"{target}/embeddings.tsv", "a") as f:
 			f.write(new_lines)
 			f.close()
 
@@ -96,6 +96,8 @@ def process_video(v_path, o_path='output/', t_interval=5.0, min_face_size=240, m
 		print(count)
 
 	vidcap.release()
+
+	tsne.csv_dimensionality_reducing(target)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
@@ -105,10 +107,8 @@ if __name__ == '__main__':
     parser.add_argument('--min_face_size', type=int, default=200, help='the minimum face size for detection (width * height)')
     parser.add_argument('--min_face_w', type=int, default=0, help='the minimum face width for detection')
     parser.add_argument('--min_face_h', type=int, default=0, help='the minimum face height for detection')
-    parser.add_argument('--face_detect_threshold', type=int, default=0, help='the confidence threshold for face detection')
-    parser.add_argument('--deep_face_model', type=str, default='Facenet512', help='the confidence threshold for face detection')
-    parser.add_argument('--deep_face_backend', type=str, default='ssd', help='the confidence threshold for face detection')
-    parser.add_argument('--worksheet', type=str, default='', help='a csv file with two columns: video_name, frame_number to indicate which frames to process (the first line should be kept for headers)')
+    parser.add_argument('--face_detect_threshold', type=float, default=0.5, help='the confidence threshold for face detection')
+    parser.add_argument('--worksheet', type=str, default='', help='a csv file with two columns: video_name, frame_number to indicate which frames to process (the frame number is senstive to the time interval set, and the first line should be kept for headers)')
     parser.add_argument('--skip_processed', action='store_true', help='Skip videos that can be found in the same output path')
 
     opt = parser.parse_args()

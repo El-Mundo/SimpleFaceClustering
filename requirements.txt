@@ -1,0 +1,6 @@
+scikit-learn
+cv2
+deepface
+mtcnn
+glob
+numpy
