@@ -1,9 +1,10 @@
 import java.util.Comparator;
 
 //Input path
-String DIR = "../output/demo";
+String DIR = "../output/demo"; //Set this to the resuls folder of a video or an image folder
 
 //Press key 'e' to export the results of clusters
+//Press key 'r' to reset camera
 
 //Display
 float axisScale = 75.0F; //Can be controlled with keys 'a' and 'd'
@@ -12,20 +13,34 @@ float globalScale = 0.2F; //Can be controlled with the mouse wheel
 float globalTranslateX = 0.0F; //Can be controlled with mouse dragging
 float globalTranslateY = 0.0F; //Can be controlled with mouse dragging
 
+//Control
+boolean draggingCursor = false; //Determines the mode of cursor. Can be controlled with key 'g'
+float draggingRange = 60.0F; //Determines the range that the mouse can drag at one time. Can be controlled with key 'u' and 'i'
+
 //Similarity
 float edgeThreshold = 2.0F; //A threshold that determines the how close can two persons be considered of the same identity. Can be controlled with keys 'j' and 'k'
-boolean useEuclidean512 = false; //Whether the Euclidean distance calculated with all 512 dimensions or the two dimensions calculated by t-SNE should be used for identifying the faces. Cannot be controlled inside the programme.
+boolean useEuclidean512 = false; //DEPRECATED. Whether the Euclidean distance calculated with all 512 dimensions or the two dimensions calculated by t-SNE should be used for identifying the faces. Cannot be controlled inside the programme.
 float edgeStep = 0.05F; //The step value for controlling edge threshold
 
 //Image size normalizing
 boolean normalize_size = true; //Whether the face images' size should be normalised
 int norm_h = 200; //The target size for normalizing
 
+//Performance
+boolean disable_auto_reclustering = false; //If this is enabled, the clusters will not be automatically updated after setting the threshold unless 'y' is pressed
+boolean disable_tinting = false; //Whether tinting will applied on dragged images. Can be controlled with key 't'
+
 //Variables
 int pMouseX = -1, pMouseY = -1;
+boolean pMousePressed = false;
 HashMap<String, Face> faces;
 ArrayList<Edge> edges;
 Table source, tsne;
+float mapMouseX = -1, mapMouseY = -1;
+int faceCounter = 0;
+ArrayList<Face> unclusteredFaces;
+ArrayList<ArrayList<Face>> clusters;
+HashMap<Face, PVector> dragged;
 
 class Face {
   float x, y;
@@ -36,6 +51,7 @@ class Face {
   float[] embedding;
   String box;
   ArrayList<Face> connectedFaces;
+  color c;
   
   public Face(float x, float y, PImage image, int frame, int face, String box) {
     this.x = x;
@@ -47,6 +63,7 @@ class Face {
     this.w = image.width;
     this.h = image.height;
     this.embedding = new float[0];
+    this.c = color(0);
     
     this.box = box;
   }
@@ -61,6 +78,7 @@ class Face {
     this.w = (int)(image.width * scale);
     this.h = (int)(image.height * scale);
     this.embedding = new float[0];
+    this.c = color(0);
     
     this.box = box;
   }
@@ -122,31 +140,26 @@ void setup() {
     faces.get(id).setPosition(x, y);
   }
   
-  println(faces.size() + " faces found in the results.");
-  
   float minDis = 9999;
   float maxDis = -9999;
   edges = new ArrayList<Edge>();
   ArrayList<String> storedEdges = new ArrayList<String>();
+  int all = (int)(sq(faces.size()) / 2) - (int)(faces.size() / 2);
+  int pro = 0;
+  
   for(Face a : faces.values()) {
     for(Face b : faces.values()) {
       if(a == b) continue;
       String test = b.id + "-" + a.id;
       if(storedEdges.contains(test)) continue; //If the revered edge of this exists, skip
-      float dis = 0;
-      if(useEuclidean512) {
-        dis = 0;
-        for(int i=0; i<512; i++) {
-          dis += sq(a.embedding[i] - b.embedding[i]);
-        }
-        dis = sqrt(dis);
-      }else{
-        dis = sqrt(sq(a.x - b.x) + sq(a.y - b.y));
-      }
+      float dis = getDistance(a, b);
       edges.add(new Edge(a, b, dis));
       if(dis > maxDis) maxDis = dis;
       if(dis < minDis) minDis = dis;
       storedEdges.add(a.id + "-" + b.id);
+      
+      pro++;
+      println(pro + "/" + all);
     }
   }
   storedEdges.clear();
@@ -156,18 +169,25 @@ void setup() {
     edgeStep = 0.01f;
   }
   
+  println(faces.size() + " faces found in the results.");
   println("Maximum distance: " + maxDis);
   println("Minimum distance: " + minDis);
+  
+  updateClusters();
+  dragged = new HashMap<Face, PVector>();
 }
 
 void draw() {
   background(196);
   imageMode(CENTER);
   
+  mapMouseX = (float)(mouseX - (float)width/2) / globalScale - globalTranslateX;
+  mapMouseY = (float)(mouseY - (float)height/2) / globalScale - globalTranslateY;
+  
   if (keyPressed) {
     if (key == 'r') {
       globalTranslateX = globalTranslateY = 0;
-      globalScale = 1;
+      globalScale = 0.2F;
     }else if(key == 'w') {
       axisScale += 0.5f;
     }else if(key == 's') {
@@ -179,7 +199,12 @@ void draw() {
     }else if(key == 'k') {
       edgeThreshold += edgeStep;
     }else if(key == 'j') {
-      edgeThreshold -= edgeStep;
+      if(edgeThreshold > edgeStep)
+        edgeThreshold -= edgeStep;
+    }else if(key == 'u') {
+      draggingRange -= 2.5F;
+    }else if(key == 'i') {
+      draggingRange += 2.5F;
     }
   }
   
@@ -188,23 +213,83 @@ void draw() {
   translate(globalTranslateX, globalTranslateY);
   stroke(1);
   
-  for(Face f : faces.values()) {
-    push();
-      translate(f.x * axisScale, f.y * axisScale);
-      scale(localScale);
-      image(f.image, f.x, f.y, f.w, f.h);
-    pop();
+  float m_rad = draggingRange / 2;
+  
+  if(draggingCursor) {
+    if(dragged.size() == 0) {
+      for(Face f : faces.values()) {
+        push();
+          float rx = f.x * axisScale;
+          float ry = f.y * axisScale;
+          float rw = f.w * localScale;
+          float rh = f.h * localScale;
+          float hw = rw / 2;
+          float hh = rh / 2;
+          translate(rx, ry);
+          
+          boolean tinting = false;
+          if(mapMouseX + m_rad > rx - hw && mapMouseX - m_rad < rx + hw) {
+            if(mapMouseY + m_rad > ry - hh && mapMouseY - m_rad < ry + hh) {
+              tinting = true;
+            }
+          }
+          
+          if(tinting && !disable_tinting) tint(128);
+          image(f.image, 0, 0, rw, rh);
+          if(tinting) {
+            noTint();
+            if(mousePressed && !pMousePressed) {
+              float mx = f.x - mapMouseX / axisScale;
+              float my = f.y - mapMouseY / axisScale;
+              PVector rel = new PVector(mx, my);
+              dragged.put(f, rel);
+            }
+          }
+        pop();
+      }
+    }else{
+      for(Face f : faces.values()) {
+        push();
+          translate(f.x * axisScale, f.y * axisScale);
+          scale(localScale);
+          boolean tinting = dragged.containsKey(f);
+          if(tinting && !disable_tinting) tint(128);
+          image(f.image, 0, 0, f.w, f.h);
+          if(tinting) {
+            PVector rel = dragged.get(f);
+            f.x = mapMouseX / axisScale + rel.x;
+            f.y = mapMouseY / axisScale + rel.y;
+            noTint();
+          }
+        pop();
+      }
+    }
+  }else{
+    for(Face f : faces.values()) {
+      push();
+        translate(f.x * axisScale, f.y * axisScale);
+        scale(localScale);
+        image(f.image, 0, 0, f.w, f.h);
+      pop();
+    }
   }
   
   push();
     scale(axisScale);
-    stroke(0, 64);
     strokeWeight(0.05);
     for(Edge e : edges) {
-      if(e.dis < edgeThreshold)
+      if(e.dis < edgeThreshold) {
+        stroke(e.a.c, 96);
         line(e.a.x, e.a.y, e.b.x, e.b.y);
+      }
     }
   pop();
+  
+  if(draggingCursor) {
+    fill(255, 128);
+    circle(mapMouseX, mapMouseY, draggingRange);
+  }
+  pMousePressed = mousePressed;
 }
 
 void mouseWheel(MouseEvent event) {
@@ -220,62 +305,61 @@ void mousePressed() {
 }
 
 void mouseDragged() {
-  float xMov = mouseX - pMouseX;
-  float yMov = mouseY - pMouseY;
-  
-  globalTranslateX += map(xMov, -10, 10, -50, 50);
-  globalTranslateY += map(yMov, -10, 10, -50, 50);
+  if(!draggingCursor) {
+    float xMov = mouseX - pMouseX;
+    float yMov = mouseY - pMouseY;
+    
+    globalTranslateX += map(xMov, -10, 10, -50, 50);
+    globalTranslateY += map(yMov, -10, 10, -50, 50);
+  }
   
   pMouseX = mouseX;
   pMouseY = mouseY;
 }
 
-void keyReleased() {
-  if(key == 'e') {
-    exportClusters();
+void completeDragging() {
+  recalculatedDistance(dragged);
+  dragged.clear();
+  if(!disable_auto_reclustering) {
+    updateClusters();
   }
 }
 
-int faceCounter = 0;
-ArrayList<Face> unclusteredFaces;
+void mouseReleased() {
+  completeDragging();
+}
+
+void keyReleased() {
+  if(key == 'e') {
+    exportClusters();
+  }else if(key == 'j' || key == 'k') {
+    if(!disable_auto_reclustering) {
+      updateClusters();
+    }
+  }
+}
+
+void keyPressed() {
+  if(key == 'y') {
+    if(disable_auto_reclustering) {
+      updateClusters();
+    }
+  }else if(key == 'g') {
+    draggingCursor = !draggingCursor;
+    if(!draggingCursor) {
+      completeDragging();
+    }
+  }else if(key == 't') {
+    disable_tinting = !disable_tinting;
+  }
+}
+
+void mouseClicked() {
+  circle((int)mouseX, (int)mouseY, 20);
+}
 
 void exportClusters() {
-  for(Face f : faces.values()) {
-    f.connectedFaces = new ArrayList<Face>();
-  }
-  for(Edge e : edges) {
-    //if(e.a.connectedFaces.contains(e.b)) {println("WARNING");}
-    //if(e.b.connectedFaces.contains(e.a)) {println("WARNING");}
-    if(e.dis < edgeThreshold) { 
-      e.a.connectedFaces.add(e.b);
-      e.b.connectedFaces.add(e.a);
-    }
-  }
-  
-  faceCounter = 0;
-  unclusteredFaces = new ArrayList<Face>(faces.values());
-  ArrayList<ArrayList<Face>> clusters = new ArrayList<ArrayList<Face>>();
-  Face[] all = faces.values().toArray(new Face[faces.size()]);
-  
-  for(Face f : all) {
-    if(unclusteredFaces.contains(f)) {
-      ArrayList<Face> newCluster = new ArrayList<Face>();
-      for(Face f2 : all) {
-        if(f2 == f) continue;
-        if(!unclusteredFaces.contains(f2)) {
-          continue;
-        }
-        if(isConnected(f, f2) && !newCluster.contains(f2)) {
-          newCluster.add(f2);
-          unclusteredFaces.remove(f2);
-          faceCounter++;
-        }
-      }
-      clusters.add(newCluster);
-    }
-  }
-  
-  clusters.sort(Comparator.comparing(ArrayList<Face>::size).reversed());
+  updateClusters();
   
   Table table = new Table();
   table.addColumn("cluster");
@@ -324,3 +408,87 @@ boolean isConnected(Face a, Face b) {
   }
   return false;
 }
+
+void updateClusters() {
+  for(Face f : faces.values()) {
+    f.connectedFaces = new ArrayList<Face>();
+  }
+  for(Edge e : edges) {
+    //if(e.a.connectedFaces.contains(e.b)) {println("WARNING");}
+    //if(e.b.connectedFaces.contains(e.a)) {println("WARNING");}
+    if(e.dis < edgeThreshold) { 
+      e.a.connectedFaces.add(e.b);
+      e.b.connectedFaces.add(e.a);
+    }
+  }
+  
+  faceCounter = 0;
+  unclusteredFaces = new ArrayList<Face>(faces.values());
+  clusters = new ArrayList<ArrayList<Face>>();
+  Face[] all = faces.values().toArray(new Face[faces.size()]);
+  
+  for(Face f : all) {
+    if(unclusteredFaces.contains(f)) {
+      ArrayList<Face> newCluster = new ArrayList<Face>();
+      for(Face f2 : all) {
+        if(f2 == f) continue;
+        if(!unclusteredFaces.contains(f2)) {
+          continue;
+        }
+        if(isConnected(f, f2) && !newCluster.contains(f2)) {
+          newCluster.add(f2);
+          unclusteredFaces.remove(f2);
+          faceCounter++;
+        }
+      }
+      clusters.add(newCluster);
+    }
+  }
+  
+  clusters.sort(Comparator.comparing(ArrayList<Face>::size).reversed());
+  
+  int i = 0;
+  for(ArrayList<Face> c : clusters) {
+    for(Face f : c) {
+      f.c = colors[i];
+    }
+    i++;
+    if(i >= colors.length) i = 0;
+  }
+}
+
+void recalculatedDistance(HashMap<Face, PVector> updated) {
+  for(Edge e : edges) {
+    if(updated.containsKey(e.a) || updated.containsKey(e.b)) {
+      e.dis = getDistance(e.a, e.b);
+    }
+  }
+}
+
+float getDistance(Face a, Face b) {
+  float dis = 0;
+  if(useEuclidean512) {
+    for(int i=0; i<512; i++) {
+      dis += sq(a.embedding[i] - b.embedding[i]);
+    }
+    dis = sqrt(dis);
+  }else{
+    dis = sqrt(sq(a.x - b.x) + sq(a.y - b.y));
+  }
+  return dis;
+}
+
+color c1 = #ba0000;
+color c2 = #ba6900;
+color c3 = #b4ba00;
+color c4 = #00ba03;
+color c5 = #00b4ba;
+color c6 = #0016ba;
+color c7 = #9c0096;
+color c8 = #d10073;
+color c9 = #000000;
+color c10 = #a3b0bf;
+
+color[] colors  = {  
+  c1, c2, c3, c4, c5, c6, c7, c8, c9, c10
+};
