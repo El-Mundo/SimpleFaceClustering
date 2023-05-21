@@ -2,7 +2,7 @@ output/*
 !output.txt
 
 img_demo/*
-!sample.png
+!*.png
 
 src/gen_cmd.ipynb
 test.ipynb
