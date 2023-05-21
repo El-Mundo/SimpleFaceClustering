@@ -1,12 +1,15 @@
 output/*
 !output.txt
 
+src/kmean.py
+
 img_demo/*
 !*.png
 
 src/gen_cmd.ipynb
 test.ipynb
 worksheet.csv
+meta.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
