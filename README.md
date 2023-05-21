@@ -70,5 +70,5 @@ In the first entry, Keming is the rival of Zhanwu and depicted as an unfaithful 
 
 In addition, as Keming's importance increased in the story, he became the largest cluster in the subsequent film, which suggests that he has received close-up shots even more than the leading character Zhanwu:
 
-![IllustrationZhanwu](img_demo/sample4.png)
-![IllustrationKeming](img_demo/sample5.png)
+![IllustrationZhanwu](img_demo/sample-zhnawu.png)
+![IllustrationKeming](img_demo/sample-keming.png)
