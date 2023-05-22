@@ -72,3 +72,9 @@ In addition, as Keming's importance increased in the story, he became the larges
 
 ![IllustrationZhanwu](img_demo/sample-zhanwu.png)
 ![IllustrationKeming](img_demo/sample-keming.png)
+
+# Timeline
+
+This is an experimental feature added on 22/May/2023. It maps the appearance of clustered faces based on the frame code recorded in a processed video. Using this feature, the interactions between characters in a film can be explored:
+
+![Timeline](img_demo/sample-timeline.png)
