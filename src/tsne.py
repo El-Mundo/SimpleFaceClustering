@@ -64,12 +64,12 @@ def csv_dimensionality_reducing(dir, one_d=False):
     else:
         face_tsne(matrix, dir, frame_codes, face_codes)
 
-#if __name__ == "__main__":
-#    parser = argparse.ArgumentParser(prog='test.py')
-#    parser.add_argument('--path', type=str, default='', help='the path to the result folder of a video')
-#    parser.add_argument('--one_dimension', action='store_true', help='enables this to generated a 1D T-SNE csv')
-#    args = parser.parse_args()
-#    csv_dimensionality_reducing(args.path, args.one_dimension)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(prog='test.py')
+    parser.add_argument('--path', type=str, default='', help='the path to the result folder of a video')
+    parser.add_argument('--one_dimension', action='store_true', help='enables this to generated a 1D T-SNE csv')
+    args = parser.parse_args()
+    csv_dimensionality_reducing(args.path, args.one_dimension)
     
 def merge_face_tsne(matrix, dir, frame_codes, face_codes, films):
 	num = matrix.shape[0]
@@ -141,5 +141,3 @@ def merge_all_outputs():
 	print(matrix.shape)
 	print(f"{i} films in {wanted_region} {wanted_type}")
 	merge_face_tsne(matrix, f"../tsne/{wanted_region}", frame_codes, face_codes, film_codes)
-
-merge_all_outputs()

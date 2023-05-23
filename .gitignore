@@ -2,8 +2,6 @@ output/*
 !output.txt
 !output/demo
 
-src/kmean.py
-
 img_demo/*
 !*.png
 
